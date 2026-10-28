@@ -1,0 +1,731 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Когортный калькулятор</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<link href="https://fonts.cdnfonts.com/css/gilroy-free" rel="stylesheet">
+<style>
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+:root {
+  --bg:           #F3F3F3;
+  --white:        #FFFFFF;
+  --border:       #DEDEDE;
+  --text:         #0B0B0B;
+  --text-mid:     #4A4A4A;
+  --text-dim:     #9A9A9A;
+  --accent:       #41559A;
+  --accent-dark:  #2F3D72;
+  --accent-light: #EEF1F9;
+  --accent-bd:    #C0C9E4;
+  --green:        #BFE74B;
+  --success:      #3A6B00;
+  --radius:       10px;
+  --shadow-sm:    0 1px 3px rgba(11,11,11,.06);
+}
+
+body {
+  background: var(--bg);
+  color: var(--text);
+  font-family: 'Gilroy', sans-serif;
+  min-height: 100vh;
+  -webkit-font-smoothing: antialiased;
+}
+
+.card {
+  background: var(--white);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow-sm);
+  margin-bottom: 16px;
+  overflow: hidden;
+}
+.card-header {
+  padding: 16px 24px;
+  border-bottom: 1px solid var(--border);
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.card-title { font-size: 14px; font-weight: 700; }
+.card-body { padding: 24px; }
+
+.page { max-width: 1100px; margin: 0 auto; padding: 40px 24px 80px; }
+
+.hero { margin-bottom: 32px; }
+.hero h1 { font-size: 28px; font-weight: 700; letter-spacing: -.02em; margin-bottom: 6px; }
+.hero p { font-size: 15px; color: var(--text-mid); }
+
+.cfg-grid {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 16px;
+  margin-bottom: 20px;
+}
+.field label { display: block; font-size: 12px; font-weight: 600; color: var(--text-mid); margin-bottom: 6px; }
+.field select, .field input {
+  width: 100%;
+  padding: 9px 12px;
+  border: 1px solid var(--border);
+  border-radius: 7px;
+  font-family: 'Gilroy', sans-serif;
+  font-size: 13px;
+  color: var(--text);
+  background: var(--white);
+  outline: none;
+  transition: border-color .15s;
+  cursor: pointer;
+}
+.field select:focus, .field input:focus { border-color: var(--accent); box-shadow: 0 0 0 3px rgba(65,85,154,.1); }
+.field-hint { font-size: 11px; color: var(--text-dim); margin-top: 4px; }
+
+.drop-zone {
+  border: 1.5px dashed var(--border);
+  border-radius: var(--radius);
+  padding: 36px 24px;
+  text-align: center;
+  cursor: pointer;
+  position: relative;
+  transition: border-color .18s, background .18s;
+  background: var(--bg);
+  margin-bottom: 20px;
+}
+.drop-zone:hover, .drop-zone.over { border-color: var(--accent); background: var(--accent-light); }
+.drop-zone input { position: absolute; inset: 0; opacity: 0; cursor: pointer; width: 100%; height: 100%; }
+.dz-ico { font-size: 32px; margin-bottom: 8px; }
+.dz-main { font-size: 14px; font-weight: 600; color: var(--text); margin-bottom: 4px; }
+.dz-sub { font-size: 12px; color: var(--text-dim); }
+
+.btn-row { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
+.btn {
+  display: inline-flex; align-items: center; gap: 7px;
+  padding: 10px 20px; border-radius: 7px;
+  font-family: 'Gilroy', sans-serif; font-size: 13px; font-weight: 600;
+  cursor: pointer; border: 1px solid transparent; transition: all .15s;
+}
+.btn:disabled { opacity: .35; cursor: not-allowed; }
+.btn-primary { background: var(--accent); color: #fff; border-color: var(--accent); }
+.btn-primary:hover:not(:disabled) { background: var(--accent-dark); }
+.btn-ghost { background: transparent; color: var(--text-mid); border-color: var(--border); }
+.btn-ghost:hover:not(:disabled) { background: var(--bg); }
+.btn-green { background: var(--green); color: var(--text); border-color: var(--green); }
+.btn-green:hover:not(:disabled) { background: #D4FF55; }
+
+.status { font-size: 13px; color: var(--text-mid); padding: 8px 0; }
+.status.ok { color: var(--success); font-weight: 600; }
+.status.err { color: #DC2626; }
+
+.legend-row {
+  display: flex; gap: 20px; align-items: center;
+  margin-bottom: 16px; flex-wrap: wrap;
+}
+.legend-item { display: flex; align-items: center; gap: 6px; font-size: 12px; color: var(--text-mid); }
+.legend-dot { width: 12px; height: 12px; border-radius: 3px; }
+
+.table-wrap { overflow-x: auto; }
+
+.cohort-table {
+  border-collapse: collapse;
+  font-size: 12.5px;
+  width: 100%;
+  min-width: 600px;
+}
+.cohort-table th {
+  background: #0B0B0B;
+  color: #fff;
+  font-weight: 600;
+  font-size: 11px;
+  letter-spacing: .04em;
+  padding: 10px 14px;
+  text-align: center;
+  white-space: nowrap;
+  border: 1px solid #2A2A2A;
+}
+.cohort-table th.cohort-col { text-align: left; min-width: 110px; }
+.cohort-table th.size-col { min-width: 70px; }
+
+.cohort-table td {
+  padding: 9px 14px;
+  text-align: center;
+  border: 1px solid var(--border);
+  font-size: 12.5px;
+  font-weight: 500;
+  position: relative;
+}
+.cohort-table td.cohort-label {
+  text-align: left;
+  font-weight: 700;
+  background: #FAFAFA;
+  white-space: nowrap;
+  color: var(--text);
+}
+.cohort-table td.size-cell {
+  background: #FAFAFA;
+  font-weight: 700;
+  color: var(--text-mid);
+}
+.cohort-table td.retention-cell { cursor: default; }
+.cohort-table td.empty-cell { background: #F6F6F6; color: var(--text-dim); }
+
+.r90  { background: #1A3800; color: #fff; }
+.r80  { background: #2D5A00; color: #fff; }
+.r70  { background: #4A8A00; color: #fff; }
+.r60  { background: #79B800; color: #fff; }
+.r50  { background: #BFE74B; color: #0B0B0B; }
+.r40  { background: #E8F5A0; color: #3A5000; }
+.r30  { background: #FFF3CD; color: #7A5000; }
+.r20  { background: #FFE0B2; color: #7A3000; }
+.r10  { background: #FFCCBC; color: #6A2000; }
+.r0   { background: #FFEBEE; color: #B71C1C; }
+
+.stats-grid {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 14px;
+  margin-bottom: 20px;
+}
+.stat-card {
+  background: var(--white);
+  border: 1px solid var(--border);
+  border-radius: 9px;
+  padding: 16px 20px;
+  box-shadow: var(--shadow-sm);
+}
+.stat-label { font-size: 11px; font-weight: 600; color: var(--text-dim); letter-spacing: .05em; text-transform: uppercase; margin-bottom: 6px; }
+.stat-value { font-size: 26px; font-weight: 700; letter-spacing: -.02em; color: var(--text); line-height: 1; }
+.stat-sub { font-size: 12px; color: var(--text-dim); margin-top: 4px; }
+
+.mode-row { display: flex; gap: 8px; margin-bottom: 20px; flex-wrap: wrap; align-items: center; }
+.mode-label { font-size: 12px; font-weight: 600; color: var(--text-mid); margin-right: 4px; }
+.chip {
+  padding: 5px 14px;
+  border: 1px solid var(--border);
+  border-radius: 100px;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  background: var(--white);
+  color: var(--text-mid);
+  transition: all .15s;
+}
+.chip.active { background: var(--accent); color: #fff; border-color: var(--accent); }
+.chip:hover:not(.active) { background: var(--bg); }
+
+.empty-state {
+  text-align: center;
+  padding: 48px 24px;
+  color: var(--text-dim);
+}
+.empty-ico { font-size: 40px; margin-bottom: 12px; }
+.empty-title { font-size: 15px; font-weight: 600; color: var(--text-mid); margin-bottom: 6px; }
+.empty-sub { font-size: 13px; }
+
+@media (max-width: 600px) {
+  .cfg-grid { grid-template-columns: 1fr 1fr; }
+  .stats-grid { grid-template-columns: 1fr 1fr; }
+}
+</style>
+</head>
+<body>
+
+<div class="page">
+
+  <div class="hero">
+    <h1>Когортный калькулятор</h1>
+    <p>Загрузите таблицу транзакций для построения матрицы удержания клиентов и расчета LTV по месяцам</p>
+  </div>
+
+  <div class="card">
+    <div class="card-header">
+      <span class="card-title">Настройки колонок</span>
+    </div>
+    <div class="card-body">
+      <div class="cfg-grid">
+        <div class="field">
+          <label>Колонка с ID клиента</label>
+          <select id="col-client"><option value="">— выберите после загрузки —</option></select>
+          <div class="field-hint">Уникальный идентификатор покупателя</div>
+        </div>
+        <div class="field">
+          <label>Колонка с датой покупки</label>
+          <select id="col-date"><option value="">— выберите после загрузки —</option></select>
+          <div class="field-hint">Дата каждой транзакции</div>
+        </div>
+        <div class="field">
+          <label>Метрика удержания</label>
+          <select id="metric">
+            <option value="count">Количество клиентов (%)</option>
+            <option value="revenue">Выручка (%)</option>
+          </select>
+          <div class="field-hint">Что считать в ячейках таблицы</div>
+        </div>
+        <div class="field">
+          <label>Колонка с выручкой</label>
+          <select id="col-revenue"><option value="">— необязательно —</option></select>
+          <div class="field-hint">Нужна для метрик «Выручка» и «LTV»</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="card">
+    <div class="card-header">
+      <span class="card-title">Загрузка файла</span>
+    </div>
+    <div class="card-body">
+      <div class="drop-zone" id="drop-zone" ondrop="onDrop(event)" ondragover="onDragOver(event)" ondragleave="onDragLeave(event)">
+        <input type="file" accept=".xlsx,.xls,.csv" onchange="onPick(event)">
+        <div class="dz-ico">📊</div>
+        <div class="dz-main">Перетащите файл сюда или нажмите для выбора</div>
+        <div class="dz-sub">.xlsx, .xls или .csv · один файл</div>
+      </div>
+
+      <div class="btn-row">
+        <button class="btn btn-primary" id="btn-calc" onclick="calculate()" disabled>▶ Построить когортную таблицу</button>
+        <button class="btn btn-ghost" onclick="reset()">Сбросить</button>
+        <span class="status" id="status"></span>
+      </div>
+    </div>
+  </div>
+
+  <div id="results" style="display:none">
+    <div class="stats-grid" id="stats-grid"></div>
+
+    <div class="card">
+      <div class="card-header" style="justify-content:space-between;flex-wrap:wrap;gap:10px">
+        <div style="display:flex;align-items:center;gap:10px">
+          <span class="card-title">Матрица удержания</span>
+        </div>
+        <div class="btn-row">
+          <button class="btn btn-green" onclick="exportTable()">⬇ Скачать Excel</button>
+        </div>
+      </div>
+      <div class="card-body" style="padding:16px 24px 8px">
+
+        <div class="mode-row">
+          <span class="mode-label">Показать периоды:</span>
+          <button class="chip active" id="chip-pct" onclick="setMode('pct')">% удержания</button>
+          <button class="chip" id="chip-abs" onclick="setMode('abs')">Кол-во клиентов</button>
+          <button class="chip" id="chip-rev" onclick="setMode('rev')">Выручка</button>
+          <button class="chip" id="chip-ltv" onclick="setMode('ltv')">LTV</button>
+        </div>
+
+        <div class="legend-row">
+          <span style="font-size:12px;color:var(--text-mid);font-weight:600">Удержание:</span>
+          <div class="legend-item"><div class="legend-dot r90" style="width:40px"></div> >90%</div>
+          <div class="legend-item"><div class="legend-dot r70" style="width:40px"></div> 70–90%</div>
+          <div class="legend-item"><div class="legend-dot r50" style="width:40px"></div> 50–70%</div>
+          <div class="legend-item"><div class="legend-dot r30" style="width:40px"></div> 30–50%</div>
+          <div class="legend-item"><div class="legend-dot r10" style="width:40px"></div> 10–30%</div>
+          <div class="legend-item"><div class="legend-dot r0" style="width:40px"></div> &lt;10%</div>
+        </div>
+
+        <div class="table-wrap">
+          <table class="cohort-table" id="cohort-table"></table>
+        </div>
+        <div style="font-size:11px;color:var(--text-dim);margin-top:12px;margin-bottom:8px">
+          Месяц 0 — первая покупка (всегда 100%). Месяц N — доля клиентов, совершивших покупку через N месяцев после первой. Режим «LTV» показывает накопленную выручку на одного клиента когорты к месяцу N.
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="empty-state" id="empty-state">
+    <div class="empty-ico">📊</div>
+    <div class="empty-title">Загрузите файл с транзакциями</div>
+    <div class="empty-sub">Инструмент автоматически определит когорты по месяцу первой покупки<br>и построит матрицу удержания клиентов</div>
+  </div>
+
+</div>
+
+<script>
+let rawData = [];
+let cohortData = {};
+let maxPeriod = 0;
+let displayMode = 'pct';
+
+function onDragOver(e) { e.preventDefault(); e.currentTarget.classList.add('over'); }
+function onDragLeave(e) { e.currentTarget.classList.remove('over'); }
+function onDrop(e) {
+  e.preventDefault();
+  e.currentTarget.classList.remove('over');
+  const f = e.dataTransfer.files[0];
+  if (f) loadFile(f);
+}
+function onPick(e) { if (e.target.files[0]) loadFile(e.target.files[0]); e.target.value = ''; }
+
+function loadFile(file) {
+  setStatus(`Читаю ${file.name}...`);
+  const reader = new FileReader();
+  reader.onload = e => {
+    try {
+      const wb = XLSX.read(new Uint8Array(e.target.result), { type: 'array', cellDates: true });
+      const ws = wb.Sheets[wb.SheetNames[0]];
+      rawData = XLSX.utils.sheet_to_json(ws, { defval: '' });
+      if (!rawData.length) throw new Error('Файл пустой');
+      populateSelects(Object.keys(rawData[0]));
+      document.getElementById('btn-calc').disabled = false;
+      setStatus(`✓ Загружено ${rawData.length.toLocaleString('ru')} строк · ${Object.keys(rawData[0]).length} колонок`, 'ok');
+    } catch(err) {
+      setStatus('Ошибка: ' + err.message, 'err');
+    }
+  };
+  reader.readAsArrayBuffer(file);
+}
+
+function populateSelects(cols) {
+  const selects = { client: 'col-client', date: 'col-date', revenue: 'col-revenue' };
+  const hints = {
+    client: ['id клиента', 'client', 'клиент', 'customer', 'user', 'пользователь'],
+    date: ['дата', 'date', 'время', 'time', 'purchase'],
+    revenue: ['сумма', 'выручка', 'revenue', 'amount', 'price', 'цена']
+  };
+
+  for (const [key, selId] of Object.entries(selects)) {
+    const sel = document.getElementById(selId);
+    sel.innerHTML = '<option value="">— выберите —</option>';
+    cols.forEach(c => {
+      const opt = document.createElement('option');
+      opt.value = c; opt.textContent = c;
+      sel.appendChild(opt);
+    });
+    const lc = cols.map(c => c.toLowerCase());
+    const match = hints[key].find(h => lc.some(c => c.includes(h)));
+    if (match) {
+      const idx = lc.findIndex(c => c.includes(match));
+      sel.value = cols[idx];
+    }
+  }
+}
+
+function calculate() {
+  const colClient  = document.getElementById('col-client').value;
+  const colDate    = document.getElementById('col-date').value;
+  const colRevenue = document.getElementById('col-revenue').value;
+  const metric     = document.getElementById('metric').value;
+
+  if (!colClient || !colDate) {
+    setStatus('Выберите колонки с ID клиента и датой', 'err'); return;
+  }
+
+  const parseDate = v => {
+    if (!v) return null;
+    if (v instanceof Date) return v;
+    const m = String(v).match(/^(\d{1,2})[.\-\/](\d{1,2})[.\-\/](\d{2,4})$/);
+    if (m) {
+      const y = m[3].length === 2 ? 2000 + +m[3] : +m[3];
+      return new Date(y, +m[2]-1, +m[1]);
+    }
+    const d = new Date(v);
+    return isNaN(d) ? null : d;
+  };
+
+  const toYM = d => `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}`;
+  const ymLabel = ym => {
+    const [y, m] = ym.split('-');
+    const months = ['Янв','Фев','Мар','Апр','Май','Июн','Июл','Авг','Сен','Окт','Ноя','Дек'];
+    return `${months[+m-1]} ${y}`;
+  };
+
+  const firstPurchase = {};
+  let maxGlobalDate = null;
+
+  rawData.forEach(row => {
+    const cid = String(row[colClient]).trim();
+    const dt  = parseDate(row[colDate]);
+    if (!cid || !dt) return;
+    if (!firstPurchase[cid] || dt < firstPurchase[cid]) {
+      firstPurchase[cid] = dt;
+    }
+    if (!maxGlobalDate || dt > maxGlobalDate) {
+      maxGlobalDate = dt;
+    }
+  });
+
+  const clientCohort = {};
+  Object.entries(firstPurchase).forEach(([cid, dt]) => {
+    clientCohort[cid] = toYM(dt);
+  });
+
+  const data = {};
+
+  rawData.forEach(row => {
+    const cid = String(row[colClient]).trim();
+    const dt  = parseDate(row[colDate]);
+    if (!cid || !dt || !clientCohort[cid]) return;
+
+    const cohortYM = clientCohort[cid];
+    const cohortDate = new Date(+cohortYM.split('-')[0], +cohortYM.split('-')[1]-1, 1);
+    const txDate     = new Date(dt.getFullYear(), dt.getMonth(), 1);
+    const period     = (txDate.getFullYear() - cohortDate.getFullYear()) * 12
+                     + (txDate.getMonth() - cohortDate.getMonth());
+    if (period < 0) return;
+
+    if (!data[cohortYM]) data[cohortYM] = {};
+    if (!data[cohortYM][period]) data[cohortYM][period] = { clients: new Set(), revenue: 0 };
+    data[cohortYM][period].clients.add(cid);
+    if (colRevenue && row[colRevenue]) {
+      data[cohortYM][period].revenue += parseFloat(String(row[colRevenue]).replace(/[^\d.-]/g,'')) || 0;
+    }
+  });
+
+  cohortData = data;
+
+  maxPeriod = 0;
+  Object.values(data).forEach(periods => {
+    Object.keys(periods).forEach(p => { if (+p > maxPeriod) maxPeriod = +p; });
+  });
+
+  const sortedCohorts = Object.keys(data).sort();
+
+  const totalClients = Object.keys(firstPurchase).length;
+  const totalTx      = rawData.length;
+  const avgRetM1     = sortedCohorts.reduce((sum, ym) => {
+    const c0 = data[ym][0]?.clients.size || 0;
+    const c1 = data[ym][1]?.clients.size || 0;
+    return sum + (c0 ? c1/c0 : 0);
+  }, 0) / (sortedCohorts.filter(ym => data[ym][1]).length || 1);
+
+  let totalRevenue = 0;
+  if (colRevenue) {
+    rawData.forEach(row => {
+      const v = parseFloat(String(row[colRevenue]).replace(/[^\d.-]/g, ''));
+      if (!isNaN(v)) totalRevenue += v;
+    });
+  }
+  const ltv = (colRevenue && totalClients) ? totalRevenue / totalClients : null;
+  const ltvFmt = ltv !== null
+    ? new Intl.NumberFormat('ru', { style: 'currency', currency: 'RUB', maximumFractionDigits: 0 }).format(ltv)
+    : '—';
+
+  document.getElementById('stats-grid').innerHTML = `
+    <div class="stat-card">
+      <div class="stat-label">Уникальных клиентов</div>
+      <div class="stat-value">${totalClients.toLocaleString('ru')}</div>
+      <div class="stat-sub">${sortedCohorts.length} когорт</div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-label">Всего транзакций</div>
+      <div class="stat-value">${totalTx.toLocaleString('ru')}</div>
+      <div class="stat-sub">за весь период</div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-label">Удержание · Месяц 1</div>
+      <div class="stat-value" style="color:${retColor(avgRetM1*100)}">${(avgRetM1*100).toFixed(1)}%</div>
+      <div class="stat-sub">среднее по когортам</div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-label">LTV на клиента</div>
+      <div class="stat-value" style="color:${ltv===null?'#9A9A9A':'#41559A'}">${ltvFmt}</div>
+      <div class="stat-sub">${colRevenue ? 'выручка / клиенты' : 'выберите колонку выручки'}</div>
+    </div>
+  `;
+
+  window._cohortState = { data, sortedCohorts, ymLabel, colRevenue, maxGlobalDate };
+  renderTable();
+
+  document.getElementById('results').style.display = 'block';
+  document.getElementById('empty-state').style.display = 'none';
+  setStatus('', '');
+}
+
+function retColor(pct) {
+  if (pct >= 50) return '#3A6B00';
+  if (pct >= 30) return '#7A7A00';
+  return '#B71C1C';
+}
+
+function setMode(mode) {
+  displayMode = mode;
+  ['pct','abs','rev','ltv'].forEach(m => document.getElementById('chip-'+m).classList.toggle('active', m===mode));
+  renderTable();
+}
+
+function renderTable() {
+  const { data, sortedCohorts, ymLabel, maxGlobalDate } = window._cohortState;
+  const table = document.getElementById('cohort-table');
+
+  let html = '<thead><tr>';
+  html += '<th class="cohort-col">Когорта</th>';
+  html += '<th class="size-col">Клиентов</th>';
+  for (let p = 0; p <= maxPeriod; p++) {
+    html += `<th>Месяц ${p}</th>`;
+  }
+  html += '</tr></thead><tbody>';
+
+  sortedCohorts.forEach(ym => {
+    const cohort = data[ym];
+    const size   = cohort[0]?.clients.size || 0;
+    html += `<tr><td class="cohort-label">${ymLabel(ym)}</td>`;
+    html += `<td class="size-cell">${size.toLocaleString('ru')}</td>`;
+
+    let cumRev = 0;
+    
+    const cohortDate = new Date(+ym.split('-')[0], +ym.split('-')[1]-1, 1);
+    let lastPeriodByCalendar = maxPeriod; 
+    if (maxGlobalDate) {
+       const maxDateMonth = new Date(maxGlobalDate.getFullYear(), maxGlobalDate.getMonth(), 1);
+       const diffMonths = (maxDateMonth.getFullYear() - cohortDate.getFullYear()) * 12
+                        + (maxDateMonth.getMonth() - cohortDate.getMonth());
+       lastPeriodByCalendar = Math.min(diffMonths, maxPeriod);
+    }
+
+    for (let p = 0; p <= maxPeriod; p++) {
+      const cell = cohort[p];
+      if (cell) cumRev += cell.revenue || 0;
+
+      if (displayMode === 'ltv' && p <= lastPeriodByCalendar) {
+        const ltvCell = size > 0 ? cumRev / size : 0;
+        const display = ltvCell > 0
+          ? new Intl.NumberFormat('ru', { style: 'currency', currency: 'RUB', maximumFractionDigits: 0 }).format(ltvCell)
+          : '—';
+        const tip = `LTV: ${ltvCell.toFixed(0)} ₽ · накопл. выручка ${cumRev.toFixed(0)} ₽`;
+        html += `<td class="retention-cell" title="${tip}">${display}</td>`;
+        continue;
+      }
+
+      if (!cell) {
+        html += '<td class="empty-cell">—</td>';
+        continue;
+      }
+
+      const pct = size > 0 ? (cell.clients.size / size * 100) : 0;
+      const cls = retClass(pct);
+      let display = '';
+      let tip = `${pct.toFixed(1)}% удержание · ${cell.clients.size} кл.`;
+
+      if (displayMode === 'pct') {
+        display = p === 0 ? '100%' : pct.toFixed(1) + '%';
+      } else if (displayMode === 'abs') {
+        display = cell.clients.size.toLocaleString('ru');
+      } else if (displayMode === 'rev') {
+        display = cell.revenue > 0
+          ? new Intl.NumberFormat('ru', { style: 'currency', currency: 'RUB', maximumFractionDigits: 0 }).format(cell.revenue)
+          : '—';
+      }
+
+      html += `<td class="retention-cell ${displayMode === 'pct' ? cls : ''}" title="${tip}">${display}</td>`;
+    }
+    html += '</tr>';
+  });
+
+  if (displayMode === 'ltv') {
+    html += '<tr style="background:#F0F3FB;font-weight:700">';
+    html += '<td class="cohort-label" style="background:#E4E9F7">Средний LTV</td>';
+    html += '<td class="size-cell">—</td>';
+    for (let p = 0; p <= maxPeriod; p++) {
+      let sumRev = 0, sumSize = 0;
+      sortedCohorts.forEach(ym => {
+        const cohort = data[ym];
+        const size = cohort[0]?.clients.size || 0;
+        if (!size) return;
+        
+        let hasData = false;
+        for (let k = 0; k <= p; k++) {
+          if (cohort[k]) hasData = true;
+        }
+        if (!hasData) return;
+
+        let cum = 0;
+        for (let k = 0; k <= p; k++) cum += cohort[k]?.revenue || 0;
+        sumRev += cum;
+        sumSize += size;
+      });
+      const avg = sumSize > 0 ? sumRev / sumSize : 0;
+      const fmt = avg > 0
+        ? new Intl.NumberFormat('ru', { style: 'currency', currency: 'RUB', maximumFractionDigits: 0 }).format(avg)
+        : '—';
+      html += `<td style="background:#E4E9F7">${fmt}</td>`;
+    }
+    html += '</tr>';
+  }
+
+  html += '</tbody>';
+  table.innerHTML = html;
+}
+
+function retClass(pct) {
+  if (pct >= 90) return 'r90';
+  if (pct >= 80) return 'r80';
+  if (pct >= 70) return 'r70';
+  if (pct >= 60) return 'r60';
+  if (pct >= 50) return 'r50';
+  if (pct >= 40) return 'r40';
+  if (pct >= 30) return 'r30';
+  if (pct >= 20) return 'r20';
+  if (pct >= 10) return 'r10';
+  return 'r0';
+}
+
+function exportTable() {
+  const { data, sortedCohorts, ymLabel } = window._cohortState;
+
+  const rows1 = [];
+  const header1 = ['Когорта', 'Клиентов'];
+  for (let p = 0; p <= maxPeriod; p++) header1.push(`Месяц ${p} (%)`);
+  rows1.push(header1);
+
+  sortedCohorts.forEach(ym => {
+    const cohort = data[ym];
+    const size = cohort[0]?.clients.size || 0;
+    const row = [ymLabel(ym), size];
+    for (let p = 0; p <= maxPeriod; p++) {
+      const cell = cohort[p];
+      row.push(cell ? +(cell.clients.size / size * 100).toFixed(1) : '');
+    }
+    rows1.push(row);
+  });
+
+  const rows2 = [];
+  const header2 = ['Когорта', 'Клиентов'];
+  for (let p = 0; p <= maxPeriod; p++) header2.push(`LTV к месяцу ${p} (₽)`);
+  rows2.push(header2);
+
+  sortedCohorts.forEach(ym => {
+    const cohort = data[ym];
+    const size = cohort[0]?.clients.size || 0;
+    const row = [ymLabel(ym), size];
+    let cum = 0;
+    for (let p = 0; p <= maxPeriod; p++) {
+      cum += cohort[p]?.revenue || 0;
+      row.push(size > 0 ? +(cum / size).toFixed(2) : '');
+    }
+    rows2.push(row);
+  });
+
+  const wb = XLSX.utils.book_new();
+
+  const ws1 = XLSX.utils.aoa_to_sheet(rows1);
+  ws1['!cols'] = [{ wch: 14 }, { wch: 10 }, ...Array(maxPeriod+1).fill({ wch: 12 })];
+  XLSX.utils.book_append_sheet(wb, ws1, 'Когорты (%)');
+
+  const ws2 = XLSX.utils.aoa_to_sheet(rows2);
+  ws2['!cols'] = [{ wch: 14 }, { wch: 10 }, ...Array(maxPeriod+1).fill({ wch: 16 })];
+  XLSX.utils.book_append_sheet(wb, ws2, 'LTV');
+
+  XLSX.writeFile(wb, 'когортный_анализ.xlsx');
+}
+
+function setStatus(msg, cls = '') {
+  const el = document.getElementById('status');
+  el.textContent = msg;
+  el.className = 'status' + (cls ? ' ' + cls : '');
+}
+
+function reset() {
+  rawData = [];
+  cohortData = {};
+  maxPeriod = 0;
+  document.getElementById('btn-calc').disabled = true;
+  document.getElementById('results').style.display = 'none';
+  document.getElementById('empty-state').style.display = 'block';
+  setStatus('');
+  ['col-client','col-date','col-revenue'].forEach(id => {
+    const sel = document.getElementById(id);
+    sel.innerHTML = '<option value="">— выберите после загрузки —</option>';
+  });
+}
+</script>
+</body>
+</html>
